@@ -15,13 +15,14 @@ export default defineNuxtPlugin(() => {
             await db.exec(sql)
           }
           catch (err) {
-            console.log(err)
+            console.error('[nuxt-content] Error applying HMR query:', err)
           }
         }
+        // console.log(`[nuxt-content] HMR Update applied for ${data.key} in ${data.collection}`)
         refreshNuxtData()
       }
-      catch {
-        // ignore
+      catch (e) {
+        console.error('[nuxt-content] HMR failed:', e)
       }
     })
   })

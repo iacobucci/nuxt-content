@@ -36,6 +36,9 @@
     "./server": "./dist/runtime/server.js",
     "./nitro": "./dist/runtime/nitro.js"
   },
+  "bin": {
+    "nuxt-content": "./dist/cli.mjs"
+  },
   "main": "./dist/module.cjs",
   "types": "./dist/module.d.mts",
   "files": [
@@ -177,6 +180,7 @@
     "entries": [
       "./src/module",
       "./src/preview",
+      "./src/cli",
       {
         "input": "src/features/",
         "outDir": "dist/features",

@@ -6,7 +6,7 @@ import { decompressSQLDump } from './dump'
 import { fetchDatabase } from './api'
 import { refineContentFields } from './collection'
 import type { DatabaseAdapter, RuntimeConfig } from '@nuxt/content'
-import { tables, checksums, checksumsStructure } from '#content/manifest'
+import { useRuntimeManifest } from './manifest'
 import adapter from '#content/adapter'
 import localAdapter from '#content/local-adapter'
 
@@ -38,38 +38,45 @@ export default function loadDatabaseAdapter(config: RuntimeConfig['content']) {
   }
 }
 
-const checkDatabaseIntegrity = new Map<string, boolean>()
+const verifiedChecksums = new Map<string, string>()
 const integrityCheckPromise = new Map<string, Promise<void> | null>()
+
 export async function checkAndImportDatabaseIntegrity(event: H3Event, collection: string, config: RuntimeConfig['content']): Promise<void> {
-  if (checkDatabaseIntegrity.get(collection) !== false) {
-    checkDatabaseIntegrity.set(collection, false)
-    if (!integrityCheckPromise.has(collection)) {
-      const _integrityCheck = _checkAndImportDatabaseIntegrity(event, collection, checksums[collection]!, checksumsStructure[collection]!, config)
-        .then((isValid) => {
-          checkDatabaseIntegrity.set(collection, !isValid)
-        })
-        .catch((error) => {
-          console.error('Database integrity check failed', error)
-          checkDatabaseIntegrity.set(collection, true)
-          integrityCheckPromise.delete(collection)
-        })
+  const { checksums, checksumsStructure } = useRuntimeManifest()
+  const currentChecksum = checksums[collection]
 
-      integrityCheckPromise.set(collection, _integrityCheck)
-    }
+  // If already verified with this checksum, skip further checks.
+  if (verifiedChecksums.get(collection) === currentChecksum) {
+    return
   }
 
-  if (integrityCheckPromise.has(collection)) {
-    await integrityCheckPromise.get(collection)!
+  const promiseKey = `${collection}:${currentChecksum}`
+  if (!integrityCheckPromise.has(promiseKey)) {
+    const _integrityCheck = _checkAndImportDatabaseIntegrity(event, collection, checksums[collection]!, checksumsStructure[collection]!, config)
+      .then((isValid) => {
+        if (isValid) {
+          verifiedChecksums.set(collection, currentChecksum!)
+        }
+        integrityCheckPromise.delete(promiseKey)
+      })
+      .catch((error) => {
+        console.error(`[nuxt-content] Integrity check failed for ${collection}:`, error)
+        integrityCheckPromise.delete(promiseKey)
+      })
+
+    integrityCheckPromise.set(promiseKey, _integrityCheck)
   }
+
+  await integrityCheckPromise.get(promiseKey)
 }
 
 async function _checkAndImportDatabaseIntegrity(event: H3Event, collection: string, integrityVersion: string, structureIntegrityVersion: string, config: RuntimeConfig['content']) {
   const db = loadDatabaseAdapter(config)
+  const { tables } = useRuntimeManifest()
 
   const before = await db.first<{ version: string, structureVersion: string, ready: boolean }>(`SELECT * FROM ${tables.info} WHERE id = ?`, [`checksum_${collection}`]).catch((): null => null)
 
   if (before?.version && !String(before.version)?.startsWith(`${config.databaseVersion}--`)) {
-    // database version is not supported, drop the info table
     await db.exec(`DROP TABLE IF EXISTS ${tables.info}`)
     before.version = ''
   }
@@ -79,25 +86,21 @@ async function _checkAndImportDatabaseIntegrity(event: H3Event, collection: stri
   if (before?.version) {
     if (before.version === integrityVersion) {
       if (before.ready) {
-        // table is already initialized and ready, use it
         return true
       }
-
-      // if another request has already started the initialization of
-      // this version of this collection, wait for it to finish
-      // then respond that the database is ready
-      // NOTE: only wait if the version is the same so if the previous init
-      // was interrupted or has failed, it will not block the new init
       await waitUntilDatabaseIsReady(db, collection)
-
       return true
     }
 
-    // Delete old version -- checksum exists but does not match with bundled checksum
-    await db.exec(`DELETE FROM ${tables.info} WHERE id = ?`, [`checksum_${collection}`])
+    // Update metadata but trust surgical HMR in development
+    if (import.meta.dev) {
+      await db.exec(`UPDATE ${tables.info} SET version = ?, structureVersion = ?, ready = true WHERE id = ?`, [integrityVersion, structureIntegrityVersion, `checksum_${collection}`])
+      return true
+    }
 
+    // In production, version mismatch means we need a full update
+    await db.exec(`DELETE FROM ${tables.info} WHERE id = ?`, [`checksum_${collection}`])
     if (!unchangedStructure) {
-      // we need to drop the table and recreate it
       await db.exec(`DROP TABLE IF EXISTS ${tables[collection]}`)
     }
   }
@@ -107,14 +110,10 @@ async function _checkAndImportDatabaseIntegrity(event: H3Event, collection: stri
   let hashesInDb = new Set<string>()
 
   if (unchangedStructure) {
-    // get the list of hash to insert
     const hashListFromTheDump = new Set(dumpLinesHash)
-
-    // get the list of hash in the database
     const hashesInDbRecords = await db.all<{ __hash__: string }>(`SELECT __hash__ FROM ${tables[collection]}`).catch(() => [] as { __hash__: string }[])
     hashesInDb = new Set(hashesInDbRecords.map(r => r.__hash__))
 
-    // get the list of hash to delete
     const hashesToDelete = hashesInDb.difference(hashListFromTheDump)
     if (hashesToDelete.size) {
       await db.exec(`DELETE FROM ${tables[collection]} WHERE __hash__ IN (${Array(hashesToDelete.size).fill('?').join(',')})`, Array.from(hashesToDelete))
@@ -124,24 +123,13 @@ async function _checkAndImportDatabaseIntegrity(event: H3Event, collection: stri
   await dump.reduce(async (prev: Promise<void>, sql: string, index: number) => {
     await prev
 
-    // in D1, there is a bug where semicolons and comments can't work together
-    // so we need to split the SQL and remove the comment
-    // @see https://github.com/cloudflare/workers-sdk/issues/3892
     const hash = dumpLinesHash[index]!
     const statement = sql.substring(0, sql.length - hash.length - 4)
 
-    // If the structure has not changed,
-    // skip any insert/update line whose hash is already in the database.
-    // If not, since we dropped the table, no record is skipped, insert them all again.
     if (unchangedStructure) {
-      // Skip any line that is structure related:
-      // since the structure is unchanged
       if (hash === 'structure') {
         return Promise.resolve()
       }
-
-      // Skip any record whose hash is already in the DB:
-      // We do not need to insert what is already there
       if (hashesInDb.has(hash)) {
         return Promise.resolve()
       }
@@ -157,16 +145,8 @@ async function _checkAndImportDatabaseIntegrity(event: H3Event, collection: stri
   return after?.version === integrityVersion
 }
 
-/**
- * Timeout for waiting for another request to finish the database initialization
- */
 const REQUEST_TIMEOUT = 90
 
-/**
- * Wait until another request has finished the database initialization
- * @param db - Database adapter
- * @param collection - Collection name
- */
 async function waitUntilDatabaseIsReady(db: DatabaseAdapter, collection: string) {
   let iterationCount = 0
   let interval: NodeJS.Timer
@@ -180,8 +160,6 @@ async function waitUntilDatabaseIsReady(db: DatabaseAdapter, collection: string)
         resolve(0)
       }
 
-      // after timeout is reached, give up and stop the query
-      // it has to be that initialization has failed
       if (iterationCount++ > REQUEST_TIMEOUT) {
         clearInterval(interval)
         reject(new Error('Waiting for another database initialization timed out'))
@@ -226,11 +204,8 @@ function refineDatabaseConfig(config: RuntimeConfig['content']['database']) {
   }
 
   if (config.type === 'pglite') {
-    // PGlite uses dataDir for storage location
-    // If no dataDir is provided, it will use in-memory storage
     return {
       dataDir: config.dataDir,
-      // Pass through any other PGlite-specific options
       ...config,
     }
   }

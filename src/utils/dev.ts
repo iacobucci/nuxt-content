@@ -1,11 +1,9 @@
 import { createUnplugin } from 'unplugin'
 import type { ViteDevServer } from 'vite'
-import crypto from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'pathe'
 import type { Nuxt } from '@nuxt/schema'
-import { isIgnored, updateTemplates, useLogger } from '@nuxt/kit'
-import type { ConsolaInstance } from 'consola'
+import { updateTemplates, isIgnored } from '@nuxt/kit'
 import chokidar from 'chokidar'
 import micromatch from 'micromatch'
 import { withTrailingSlash } from 'ufo'
@@ -17,8 +15,9 @@ import { createParser } from './content'
 import { moduleTemplates } from './templates'
 import { getExcludedSourcePaths, parseSourceBase } from './source'
 import { createHooks } from 'hookable'
+import { getContentChecksum, logger } from './common'
 
-export const logger: ConsolaInstance = useLogger('@nuxt/content')
+export { logger }
 
 export const contentHooks = createHooks<{
   'hmr:content:update': (data: { key: string, collection: string, queries: string[] }) => void
@@ -269,17 +268,4 @@ export function watchComponents(nuxt: Nuxt) {
       })
     }
   })
-}
-
-export function getContentChecksum(content: string) {
-  return crypto
-    .createHash('md5')
-    .update(content, 'utf8')
-    .digest('hex')
-}
-
-export function* chunks<T>(arr: T[], size: number): Generator<T[], void, unknown> {
-  for (let i = 0; i < arr.length; i += size) {
-    yield arr.slice(i, i + size)
-  }
 }

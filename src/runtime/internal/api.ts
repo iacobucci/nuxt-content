@@ -1,5 +1,5 @@
 import { getRequestHeaders, type H3Event } from 'h3'
-import { checksums } from '#content/manifest'
+import { useRuntimeManifest } from './manifest'
 
 async function fetchContent<T>(
   event: H3Event | undefined,
@@ -10,6 +10,7 @@ async function fetchContent<T>(
   const headers = event ? getRequestHeaders(event) : {}
   headers['accept-encoding'] = undefined // prevent unsupported enconding issue (https://github.com/nuxt/content/pull/3701)
 
+  const { checksums } = useRuntimeManifest()
   const url = `/__nuxt_content/${collection}/${path}`
   const fetchOptions = {
     ...options,
