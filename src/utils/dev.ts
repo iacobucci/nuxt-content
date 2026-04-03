@@ -128,7 +128,7 @@ export function watchContents(nuxt: Nuxt, options: ModuleOptions, manifest: Mani
       const { collection, source, cwd } = match
       // Remove the cwd prefix
       path = path.substring(cwd.length)
-      console.log(`[nuxt-content] [DEBUG] File changed: ${path} on ${collection.name} collection`)
+      logger.info(`File \`${path}\` changed on \`${collection.name}\` collection`)
       const { fixed } = parseSourceBase(source)
 
       const filePath = path.substring(fixed.length)
@@ -205,7 +205,6 @@ export function watchContents(nuxt: Nuxt, options: ModuleOptions, manifest: Mani
       collection: collection.name,
       queries: insertQuery ? [removeQuery, ...insertQuery] : [removeQuery],
     })
-    console.log(`[nuxt-content] [DEBUG] Broadcasted update for ${key} in ${collection.name}`)
   }
 
   nuxt.hook('close', async () => {
