@@ -2,34 +2,31 @@
 
 Abbiamo identificato diversi problemi nell'attuale implementazione della funzionalità di refresh del database, sia in produzione che in sviluppo.
 
-## Problemi Identificati
+## Problemi Identificati e Soluzioni Portate
 
-1.  **Cache del Manifest in Produzione:** Il server di produzione non rileva gli aggiornamenti del file `.data/content/manifest.json` dopo il primo caricamento a causa di un bug nella funzione `useRuntimeManifest` che restituisce sempre la versione in memoria se già presente.
-2.  **HMR in Sviluppo (Dev Mode):**
-    -   Scambio di argomenti nella chiamata a `db.insertDevelopmentCache` in `src/utils/dev.ts`, che corrompe la cache di sviluppo.
-    -   Possibile race condition tra l'aggiornamento dei template di Nuxt (manifest) e la notifica HMR inviata al client.
-3.  **Bug di Runtime:**
-    -   Riferimento mancante a `tables` nella funzione `waitUntilDatabaseIsReady` in `src/runtime/internal/database.server.ts`.
-    -   `updateTemplates` non è atteso nel watcher di sviluppo.
+### 1. Produzione: Refresh del Server senza Riavvio
+Il server di produzione ora è in grado di rilevare aggiornamenti al database e al manifest senza essere riavviato.
+- **Soluzione**: Modificato `src/runtime/internal/manifest.ts` per implementare una logica di re-validation del manifest basata sull' `mtime` del file `.data/content/manifest.json`. Ad ogni richiesta, se il file su disco è più recente della versione in memoria, viene ricaricato.
+- **Integrità del Database**: In `src/runtime/internal/database.server.ts`, il server confronta il checksum del manifest con quello salvato nella tabella `info` del database. Se c'è una discrepanza, applica chirurgicamente le query del dump SQL per sincronizzare il database senza doverlo ricreare da zero (se la struttura è identica).
 
-## Soluzioni Proposte
+### 2. Sviluppo: Fix Cache e Correttezza Asincrona
+- **Correzione Cache**: Sistemato l'ordine dei parametri in `db.insertDevelopmentCache` in `src/utils/dev.ts` che causava la corruzione della cache di sviluppo.
+- **Operazioni Asincrone**: Aggiunti `await` mancanti in `src/utils/database.ts` e `src/utils/processor.ts` per garantire che le operazioni sul database siano completate prima di procedere.
+- **Runtime Fix**: Risolto un `ReferenceError` per la variabile `tables` in `waitUntilDatabaseIsReady`.
 
-### 1. Produzione: Fix `useRuntimeManifest`
-Modificare `src/runtime/internal/manifest.ts` per controllare sempre l' `mtime` del file del manifest su disco anche se una versione è già stata caricata in memoria. In questo modo, se `pnpm exec nuxt-content` aggiorna il file, il server lo caricherà alla richiesta successiva.
+## Piano per il Ripristino dell'HMR (Live Reload) in Sviluppo
 
-### 2. Sviluppo: Fix HMR e Cache
--   Correggere l'ordine degli argomenti in `src/utils/dev.ts`: `db.insertDevelopmentCache(keyInCollection, parsedContent, checksum)`.
--   Attendere `updateTemplates` in `src/utils/dev.ts` prima di inviare la notifica HMR via websocket, per garantire che il client riceva i nuovi checksum quando interroga il manifest.
+Il ricaricamento automatico della pagina (HMR) in modalità di sviluppo smesso di funzionare. Dobbiamo ripristinarlo garantendo che conviva con le nuove funzionalità di produzione.
 
-### 3. Fix Bug di Runtime
--   Passare o recuperare correttamente `tables` in `waitUntilDatabaseIsReady`.
--   Assicurarsi che tutte le operazioni asincrone siano gestite correttamente.
+### Problema HMR
+Attualmente in `src/runtime/plugins/websocket.dev.ts`, il client riceve le query SQL via websocket e le applica al database locale (browser), chiamando poi `refreshNuxtData()`. Tuttavia, questo non sembra scatenare il ricaricamento della pagina o l'aggiornamento dei componenti in modo affidabile come faceva il commit `06c84f5`.
 
-## Passaggi Operativi
+### Strategia di Ripristino
+1. **Verifica della ricezione degli eventi**: Assicurarsi che `server.ws.send` stia effettivamente inviando i dati e che il client li riceva.
+2. **Ottimizzazione del ricaricamento**: In Nuxt Content v2/v3, l'HMR del contenuto spesso si affida al plugin Vite per invalidare i moduli o inviare segnali di refresh. 
+3. **Sincronizzazione Manifest**: In `src/utils/dev.ts`, l'attesa di `updateTemplates` è corretta, ma dobbiamo assicurarci che il client ricarichi anche il manifest se necessario, o che `refreshNuxtData` sia sufficiente.
+4. **Ripristino comportamento originale**: Il commit `06c84f5` usava `refreshNuxtData()` ma forse la catena di eventi era diversa. Verificheremo se `import.meta.hot.accept` o simili sono necessari.
 
-1.  **Modifica `src/runtime/internal/manifest.ts`**: Implementare la logica di re-validation del file manifest basata su `mtime`.
-2.  **Modifica `src/utils/dev.ts`**:
-    -   Sistemare la chiamata a `insertDevelopmentCache`.
-    -   Rendere `broadcast` asincrono (già lo è) e assicurarsi di attendere `updateTemplates`.
-3.  **Modifica `src/runtime/internal/database.server.ts`**: Fix del riferimento a `tables`.
-4.  **Test**: Verificare il funzionamento in dev e simulare il comportamento in produzione.
+### Azioni Immediate
+- Modificare `src/utils/dev.ts` per assicurarsi che l'invio via websocket avvenga correttamente dopo che il database server è stato aggiornato.
+- Verificare in `src/runtime/plugins/websocket.dev.ts` se l'aggiornamento del database locale e `refreshNuxtData()` sono sufficienti o se serve un segnale aggiuntivo a Vite per i componenti Content.

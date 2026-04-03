@@ -51,3 +51,8 @@ export function useRuntimeManifest() {
 export function setRuntimeManifest(manifest: any) {
   runtimeManifest = manifest
 }
+
+export function updateRuntimeManifest(manifest: any) {
+  runtimeManifest = manifest
+  lastManifestLoad = Date.now()
+}
