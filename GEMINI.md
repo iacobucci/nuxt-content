@@ -27,6 +27,14 @@ Attualmente in `src/runtime/plugins/websocket.dev.ts`, il client riceve le query
 3. **Sincronizzazione Manifest**: In `src/utils/dev.ts`, l'attesa di `updateTemplates` è corretta, ma dobbiamo assicurarci che il client ricarichi anche il manifest se necessario, o che `refreshNuxtData` sia sufficiente.
 4. **Ripristino comportamento originale**: Il commit `06c84f5` usava `refreshNuxtData()` ma forse la catena di eventi era diversa. Verificheremo se `import.meta.hot.accept` o simili sono necessari.
 
-### Azioni Immediate
-- Modificare `src/utils/dev.ts` per assicurarsi che l'invio via websocket avvenga correttamente dopo che il database server è stato aggiornato.
-- Verificare in `src/runtime/plugins/websocket.dev.ts` se l'aggiornamento del database locale e `refreshNuxtData()` sono sufficienti o se serve un segnale aggiuntivo a Vite per i componenti Content.
+## Evoluzione verso il "Real HMR" (Live Reload senza refresh)
+
+Inizialmente abbiamo ripristinato la funzionalità di sviluppo usando un `full-reload` della pagina. Questo è stato poi evoluto in un sistema di HMR fluido ("Real HMR") che aggiorna i dati senza ricaricare la pagina.
+
+### Sincronizzazione dei Checksum via WebSocket
+Per fare in modo che `refreshNuxtData()` funzioni correttamente senza un ricaricamento completo:
+1.  **Payload WebSocket Potenziato**: In `src/utils/dev.ts`, il server ora invia i nuovi `checksums` e `checksumsStructure` insieme alle query SQL nel messaggio `nuxt-content:update`.
+2.  **Aggiornamento Manifest Preventivo**: Il client riceve questi dati e aggiorna immediatamente il suo `runtimeManifest` interno prima di scatenare il refresh.
+3.  **Bypass della Cache**: Poiché il manifest è aggiornato, le nuove richieste di fetch effettuate da `refreshNuxtData()` contengono i parametri di versione corretti, garantendo che il server Nitro restituisca i dati appena salvati nel database.
+
+Questo approccio elimina il "blink" del ricaricamento pagina, mantenendo lo stato della UI (es. posizione dello scroll, input nei form) pur riflettendo istantaneamente le modifiche ai contenuti.

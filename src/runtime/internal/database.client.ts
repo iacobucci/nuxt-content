@@ -3,7 +3,7 @@ import { decompressSQLDump } from './dump'
 import { refineContentFields } from './collection'
 import { fetchDatabase } from './api'
 import type { DatabaseAdapter, DatabaseBindParams } from '@nuxt/content'
-import { checksums, tables } from '#content/manifest'
+import { useRuntimeManifest } from './manifest'
 
 let db: Database
 const loadedCollections = new Map<string, string>()
@@ -87,6 +87,7 @@ async function loadCollectionDatabase<T>(collection: T) {
     return db
   }
 
+  const { checksums, tables } = useRuntimeManifest()
   let compressedDump: string | null = null
 
   const checksumId = `checksum_${collection}`

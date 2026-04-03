@@ -1,17 +1,20 @@
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { join } from 'pathe'
-import { checksums as staticChecksums, checksumsStructure as staticChecksumsStructure, tables as staticTables } from '#content/manifest'
+import * as staticManifest from '#content/manifest'
 
 let runtimeManifest: any = null
 let lastManifestLoad = 0
 
 export function useRuntimeManifest() {
-  // In dev mode, we always prefer the static manifest from Nuxt HMR
+  // In dev mode, we use getters to stay in sync with Vite HMR
   if (import.meta.dev) {
-    return runtimeManifest || {
-      checksums: staticChecksums,
-      checksumsStructure: staticChecksumsStructure,
-      tables: staticTables
+    if (runtimeManifest) {
+      return runtimeManifest
+    }
+    return {
+      get checksums() { return (staticManifest as any).checksums },
+      get checksumsStructure() { return (staticManifest as any).checksumsStructure },
+      get tables() { return (staticManifest as any).tables }
     }
   }
 
@@ -42,9 +45,9 @@ export function useRuntimeManifest() {
 
   // Fallback to static manifest
   return {
-    checksums: staticChecksums,
-    checksumsStructure: staticChecksumsStructure,
-    tables: staticTables
+    checksums: (staticManifest as any).checksums,
+    checksumsStructure: (staticManifest as any).checksumsStructure,
+    tables: (staticManifest as any).tables
   }
 }
 

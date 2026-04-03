@@ -20,7 +20,7 @@ import { getContentChecksum, logger } from './common'
 export { logger }
 
 export const contentHooks = createHooks<{
-  'hmr:content:update': (data: { key: string, collection: string, queries: string[] }) => void
+  'hmr:content:update': (data: { key: string, collection: string, queries: string[], checksums: Record<string, string>, checksumsStructure: Record<string, string> }) => void
 }>()
 
 interface HMRPluginOptions {
@@ -52,8 +52,6 @@ export const NuxtContentHMRUnplugin = createUnplugin((opts: HMRPluginOptions) =>
             event: 'nuxt-content:update',
             data,
           })
-          // Force a full reload to ensure the page reflects the content changes
-          server.ws.send({ type: 'full-reload' })
         })
       },
     },
@@ -204,6 +202,8 @@ export function watchContents(nuxt: Nuxt, options: ModuleOptions, manifest: Mani
       key,
       collection: collection.name,
       queries: insertQuery ? [removeQuery, ...insertQuery] : [removeQuery],
+      checksums: manifest.checksum,
+      checksumsStructure: manifest.checksumStructure,
     })
   }
 
