@@ -36,7 +36,7 @@ export async function processCollectionItems(
 
   const usedComponents: Array<string> = []
 
-  db.dropContentTables()
+  await db.dropContentTables()
 
   for await (const collection of collections) {
     if (collection.name === 'info') {
@@ -102,7 +102,7 @@ export async function processCollectionItems(
                 collectionType: collection.type,
               })
               if (parsedContent) {
-                db.insertDevelopmentCache(keyInCollection, JSON.stringify(parsedContent), checksum)
+                await db.insertDevelopmentCache(keyInCollection, JSON.stringify(parsedContent), checksum)
               }
             }
 
@@ -134,23 +134,23 @@ export async function processCollectionItems(
   }
 
   const sqlDumpList = Object.values(collectionDump).flatMap(a => a)
-  db.exec(`DROP TABLE IF EXISTS ${infoCollection.tableName}`)
+  await db.exec(`DROP TABLE IF EXISTS ${infoCollection.tableName}`)
 
   try {
     if (db.supportsTransactions) {
-      db.exec('BEGIN TRANSACTION')
+      await db.exec('BEGIN TRANSACTION')
     }
     for (const sql of sqlDumpList) {
-      db.exec(sql)
+      await db.exec(sql)
     }
     if (db.supportsTransactions) {
-      db.exec('COMMIT')
+      await db.exec('COMMIT')
     }
   }
   catch (error) {
     if (db.supportsTransactions) {
       try {
-        db.exec('ROLLBACK')
+        await db.exec('ROLLBACK')
       }
       catch {
         // ignore

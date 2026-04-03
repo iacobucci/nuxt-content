@@ -15,11 +15,6 @@ export function useRuntimeManifest() {
     }
   }
 
-  // Production: prefer manual override or disk-loaded manifest
-  if (runtimeManifest) {
-    return runtimeManifest
-  }
-
   if (import.meta.server && !import.meta.prerender) {
     try {
       const rootDir = process.cwd()
@@ -34,14 +29,15 @@ export function useRuntimeManifest() {
           runtimeManifest = data
           lastManifestLoad = mtime
         }
-        
-        if (runtimeManifest) {
-          return runtimeManifest
-        }
       }
     } catch (e) {
       // ignore
     }
+  }
+
+  // Production: prefer manual override or disk-loaded manifest
+  if (runtimeManifest) {
+    return runtimeManifest
   }
 
   // Fallback to static manifest

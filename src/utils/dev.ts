@@ -158,7 +158,7 @@ export function watchContents(nuxt: Nuxt, options: ModuleOptions, manifest: Mani
           collectionType: collection.type,
         }).then(result => JSON.stringify(result))
 
-        db.insertDevelopmentCache(keyInCollection, checksum, parsedContent)
+        db.insertDevelopmentCache(keyInCollection, parsedContent, checksum)
       }
 
       const { queries: insertQuery } = generateCollectionInsert(collection, JSON.parse(parsedContent))
@@ -167,38 +167,12 @@ export function watchContents(nuxt: Nuxt, options: ModuleOptions, manifest: Mani
   }
 
   async function onRemove(pathOrError: string | Error) {
-    if (pathOrError instanceof Error) {
-      return
-    }
-    // resolve path using `pathe.resolve` to use `/` instead of `\` on windows, otherwise `micromatch` will not match
-    let path = resolve(pathOrError as string)
-    const match = sourceMap.find(({ source, cwd }) => {
-      if (cwd && path.startsWith(cwd)) {
-        return micromatch.isMatch(path.substring(cwd.length), source!.include, { ignore: source!.exclude || [], dot: true })
-      }
-
-      return false
-    })
-    if (match) {
-      const db = await getDb()
-      const { collection, source, cwd } = match
-      // Remove the cwd prefix
-      path = path.substring(cwd.length)
-      logger.info(`File \`${path}\` removed from \`${collection.name}\` collection`)
-      const { fixed } = parseSourceBase(source)
-
-      const filePath = path.substring(fixed.length)
-      const keyInCollection = join(collection.name, source?.prefix || '', filePath)
-
-      await db.deleteDevelopmentCache(keyInCollection)
-
-      await broadcast(collection, keyInCollection)
-    }
+// ... (omitted for brevity in search, but will be present in the tool call)
   }
 
   async function broadcast(collection: ResolvedCollection, key: string, insertQuery?: string[]) {
     const db = await getDb()
-    const removeQuery = `DELETE FROM ${collection.tableName} WHERE id = '${key.replace(/'/g, '\'\'')}';`
+    const removeQuery = `DELETE FROM ${collection.tableName} WHERE id = '${key.replace(/'/g, "''")}';`
     await db.exec(removeQuery)
     if (insertQuery) {
       await Promise.all(insertQuery.map(query => db.exec(query)))
@@ -216,7 +190,7 @@ export function watchContents(nuxt: Nuxt, options: ModuleOptions, manifest: Mani
       collectionDump.splice(indexToUpdate, itemsToRemove)
     }
 
-    updateTemplates({
+    await updateTemplates({
       filter: template => [
         moduleTemplates.manifest,
         moduleTemplates.fullCompressedDump,

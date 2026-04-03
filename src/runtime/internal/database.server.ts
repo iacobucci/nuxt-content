@@ -150,6 +150,7 @@ const REQUEST_TIMEOUT = 90
 async function waitUntilDatabaseIsReady(db: DatabaseAdapter, collection: string) {
   let iterationCount = 0
   let interval: NodeJS.Timer
+  const { tables } = useRuntimeManifest()
   await new Promise((resolve, reject) => {
     interval = setInterval(async () => {
       const row = await db.first<{ ready: boolean }>(`SELECT ready FROM ${tables.info} WHERE id = ?`, [`checksum_${collection}`])
