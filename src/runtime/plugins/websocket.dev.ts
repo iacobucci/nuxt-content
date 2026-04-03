@@ -8,6 +8,7 @@ export default defineNuxtPlugin(() => {
   import('../internal/database.client').then(({ loadDatabaseAdapter }) => {
     import('../internal/manifest').then(({ updateRuntimeManifest }) => {
       ;(import.meta.hot as unknown as { on: HotEvent }).on('nuxt-content:update', async (data) => {
+        console.log('[nuxt-content] [DEBUG] Received HMR event:', data)
         if (!data || !data.collection || !Array.isArray(data.queries)) return
         try {
           const manifest = await import('#content/manifest')
@@ -23,13 +24,14 @@ export default defineNuxtPlugin(() => {
               await db.exec(sql)
             }
             catch (err) {
-              console.error('[nuxt-content] Error applying HMR query:', err)
+              console.error('[nuxt-content] [DEBUG] Error applying HMR query:', err)
             }
           }
+          console.log('[nuxt-content] [DEBUG] SQL queries applied, refreshing Nuxt data...')
           refreshNuxtData()
         }
         catch (e) {
-          console.error('[nuxt-content] HMR failed:', e)
+          console.error('[nuxt-content] [DEBUG] HMR failed:', e)
         }
       })
     })

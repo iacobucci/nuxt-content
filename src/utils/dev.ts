@@ -52,6 +52,8 @@ export const NuxtContentHMRUnplugin = createUnplugin((opts: HMRPluginOptions) =>
             event: 'nuxt-content:update',
             data,
           })
+          // Force a full reload to ensure the page reflects the content changes
+          server.ws.send({ type: 'full-reload' })
         })
       },
     },
@@ -126,7 +128,7 @@ export function watchContents(nuxt: Nuxt, options: ModuleOptions, manifest: Mani
       const { collection, source, cwd } = match
       // Remove the cwd prefix
       path = path.substring(cwd.length)
-      logger.info(`File \`${path}\` changed on \`${collection.name}\` collection`)
+      console.log(`[nuxt-content] [DEBUG] File changed: ${path} on ${collection.name} collection`)
       const { fixed } = parseSourceBase(source)
 
       const filePath = path.substring(fixed.length)
@@ -203,6 +205,7 @@ export function watchContents(nuxt: Nuxt, options: ModuleOptions, manifest: Mani
       collection: collection.name,
       queries: insertQuery ? [removeQuery, ...insertQuery] : [removeQuery],
     })
+    console.log(`[nuxt-content] [DEBUG] Broadcasted update for ${key} in ${collection.name}`)
   }
 
   nuxt.hook('close', async () => {
