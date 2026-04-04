@@ -30,3 +30,17 @@ Attualmente in `src/runtime/plugins/websocket.dev.ts`, il client riceve le query
 ### Azioni Immediate
 - Modificare `src/utils/dev.ts` per assicurarsi che l'invio via websocket avvenga correttamente dopo che il database server è stato aggiornato.
 - Verificare in `src/runtime/plugins/websocket.dev.ts` se l'aggiornamento del database locale e `refreshNuxtData()` sono sufficienti o se serve un segnale aggiuntivo a Vite per i componenti Content.
+
+```
+Apr 04 13:25:29 vps node[15740]: [nuxt-content] Integrity check failed for favorites_en: TypeError: hashesInDb.difference is not a function
+Apr 04 13:25:29 vps node[15740]:     at _checkAndImportDatabaseIntegrity (file:///home/valerio/.local/dir/source/web/valerioiacobucci.com/.output/server/chunks/nitro/nitro.mjs:12600:39)
+Apr 04 13:25:29 vps node[15740]:     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+Apr 04 13:25:29 vps node[15740]:     at async checkAndImportDatabaseIntegrity (file:///home/valerio/.local/dir/source/web/valerioiacobucci.com/.output/server/chunks/nitro/nitro.mjs:12568:3)
+Apr 04 13:25:29 vps node[15740]:     at async Object.handler (file:///home/valerio/.local/dir/source/web/valerioiacobucci.com/.output/server/chunks/nitro/nitro.mjs:12781:5)
+Apr 04 13:25:29 vps node[15740]:     at async Object.handler (file:///home/valerio/.local/dir/source/web/valerioiacobucci.com/.output/server/chunks/nitro/nitro.mjs:2426:19)
+Apr 04 13:25:29 vps node[15740]:     at async toNodeHandle (file:///home/valerio/.local/dir/source/web/valerioiacobucci.com/.output/server/chunks/nitro/nitro.mjs:2704:7)
+Apr 04 13:25:29 vps node[15740]:     at async b (file:///home/valerio/.local/dir/source/web/valerioiacobucci.com/.output/server/chunks/nitro/nitro.mjs:1213:6985)
+Apr 04 13:25:29 vps node[15740]:     at async C (file:///home/valerio/.local/dir/source/web/valerioiacobucci.com/.output/server/chunks/nitro/nitro.mjs:1213:7268)
+Apr 04 13:25:29 vps node[15740]:     at async $fetchRaw2 (file:///home/valerio/.local/dir/source/web/valerioiacobucci.com/.output/server/chunks/nitro/nitro.mjs:3209:26)
+Apr 04 13:25:29 vps node[15740]:     at async $fetch2 (file:///home/valerio/.local/dir/source/web/valerioiacobucci.com/.output/server/chunks/nitro/nitro.mjs:3267:15)
+```
