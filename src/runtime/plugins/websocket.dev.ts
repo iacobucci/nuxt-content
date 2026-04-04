@@ -6,15 +6,15 @@ export default defineNuxtPlugin(() => {
   if (!import.meta.hot || !import.meta.client) return
 
   import('../internal/database.client').then(({ loadDatabaseAdapter }) => {
-    import('../internal/manifest').then(({ updateRuntimeManifest }) => {
+    import('../internal/manifest').then(({ updateRuntimeManifest, useRuntimeManifest }) => {
       ;(import.meta.hot as unknown as { on: HotEvent }).on('nuxt-content:update', async (data) => {
         if (!data || !data.collection || !Array.isArray(data.queries)) return
         try {
-          const manifest = await import('#content/manifest')
+          const currentManifest = useRuntimeManifest()
           updateRuntimeManifest({
-            checksums: data.checksums || manifest.checksums,
-            checksumsStructure: data.checksumsStructure || manifest.checksumsStructure,
-            tables: manifest.tables
+            checksums: data.checksums || currentManifest.checksums,
+            checksumsStructure: data.checksumsStructure || currentManifest.checksumsStructure,
+            tables: currentManifest.tables
           })
 
           const db = await loadDatabaseAdapter(data.collection)

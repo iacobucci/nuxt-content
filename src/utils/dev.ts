@@ -3,13 +3,14 @@ import type { ViteDevServer } from 'vite'
 import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'pathe'
 import type { Nuxt } from '@nuxt/schema'
+import { hash } from 'ohash'
 import { updateTemplates, isIgnored } from '@nuxt/kit'
 import chokidar from 'chokidar'
 import micromatch from 'micromatch'
 import { withTrailingSlash } from 'ufo'
 import type { ModuleOptions, ResolvedCollection } from '../types'
 import type { Manifest } from '../types/manifest'
-import { getLocalDatabase } from './database'
+import { getLocalDatabase, databaseVersion } from './database'
 import { generateCollectionInsert } from './collection'
 import { createParser } from './content'
 import { moduleTemplates } from './templates'
@@ -172,6 +173,7 @@ export function watchContents(nuxt: Nuxt, options: ModuleOptions, manifest: Mani
 
   async function broadcast(collection: ResolvedCollection, key: string, insertQuery?: string[]) {
     const db = await getDb()
+    const infoCollection = manifest.collections.find(c => c.name === "info")!;
     const removeQuery = `DELETE FROM ${collection.tableName} WHERE id = '${key.replace(/'/g, "''")}';`
     await db.exec(removeQuery)
     if (insertQuery) {
@@ -190,6 +192,30 @@ export function watchContents(nuxt: Nuxt, options: ModuleOptions, manifest: Mani
       collectionDump.splice(indexToUpdate, itemsToRemove)
     }
 
+    // Recalculate checksums to stay in sync with database and trigger client HMR correctly
+    const collectionQueries = collectionDump.filter(line => line.includes(collection.tableName) && !line.includes(infoCollection.tableName))
+    const structureQueries = collectionQueries.filter(line => line.endsWith('-- structure'))
+    
+    const structureVersion = manifest.checksumStructure[collection.name] = hash(structureQueries)
+    const version = manifest.checksum[collection.name] = `${databaseVersion}--${hash(collectionQueries)}`
+
+    // Update the version in the info table in the active database
+    await db.exec(`UPDATE ${infoCollection.tableName} SET version = ?, structureVersion = ?, ready = true WHERE id = ?`, [version, structureVersion, `checksum_${collection.name}`])
+    
+    // Update the version in the info table in the manifest.dump
+    const metaIndex = collectionDump.findIndex(item => item.includes(`'checksum_${collection.name}'`) && item.includes('-- meta'))
+    let infoUpdateQuery = ''
+    if (metaIndex !== -1) {
+       const { queries: metaQueries } = generateCollectionInsert(infoCollection, { 
+         id: `checksum_${collection.name}`, 
+         version, 
+         structureVersion, 
+         ready: true 
+       })
+       collectionDump[metaIndex] = `${metaQueries[0]} -- meta`
+       infoUpdateQuery = metaQueries[0]!
+    }
+
     await updateTemplates({
       filter: template => [
         moduleTemplates.manifest,
@@ -198,10 +224,15 @@ export function watchContents(nuxt: Nuxt, options: ModuleOptions, manifest: Mani
       ].includes(template.filename),
     })
 
+    const queries = insertQuery ? [removeQuery, ...insertQuery] : [removeQuery]
+    if (infoUpdateQuery) {
+      queries.push(infoUpdateQuery)
+    }
+
     contentHooks.callHook('hmr:content:update', {
       key,
       collection: collection.name,
-      queries: insertQuery ? [removeQuery, ...insertQuery] : [removeQuery],
+      queries,
       checksums: manifest.checksum,
       checksumsStructure: manifest.checksumStructure,
     })
