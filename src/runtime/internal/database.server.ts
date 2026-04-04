@@ -114,7 +114,7 @@ async function _checkAndImportDatabaseIntegrity(event: H3Event, collection: stri
     const hashesInDbRecords = await db.all<{ __hash__: string }>(`SELECT __hash__ FROM ${tables[collection]}`).catch(() => [] as { __hash__: string }[])
     hashesInDb = new Set(hashesInDbRecords.map(r => r.__hash__))
 
-    const hashesToDelete = hashesInDb.difference(hashListFromTheDump)
+    const hashesToDelete = new Set(Array.from(hashesInDb).filter(h => !hashListFromTheDump.has(h)))
     if (hashesToDelete.size) {
       await db.exec(`DELETE FROM ${tables[collection]} WHERE __hash__ IN (${Array(hashesToDelete.size).fill('?').join(',')})`, Array.from(hashesToDelete))
     }

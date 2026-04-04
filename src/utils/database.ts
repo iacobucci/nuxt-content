@@ -153,7 +153,7 @@ export async function getLocalDatabase(database: SqliteDatabaseConfig | D1Databa
   return {
     database: db,
     async exec(sql: string) {
-      db.exec(sql)
+      await db.exec(sql)
     },
     close() {
       Reflect.deleteProperty(_localDatabase, databaseLocation)

@@ -31,6 +31,8 @@ Attualmente in `src/runtime/plugins/websocket.dev.ts`, il client riceve le query
 - Modificare `src/utils/dev.ts` per assicurarsi che l'invio via websocket avvenga correttamente dopo che il database server è stato aggiornato.
 - Verificare in `src/runtime/plugins/websocket.dev.ts` se l'aggiornamento del database locale e `refreshNuxtData()` sono sufficienti o se serve un segnale aggiuntivo a Vite per i componenti Content.
 
+## Bug
+
 ```
 Apr 04 13:25:29 vps node[15740]: [nuxt-content] Integrity check failed for favorites_en: TypeError: hashesInDb.difference is not a function
 Apr 04 13:25:29 vps node[15740]:     at _checkAndImportDatabaseIntegrity (file:///home/valerio/.local/dir/source/web/valerioiacobucci.com/.output/server/chunks/nitro/nitro.mjs:12600:39)
